@@ -24,6 +24,9 @@ import com.web.store.model.Employee;
 @Repository
 public class EmpDaoImp implements EmpDao{
 	
+
+	int countPerPage = 5;
+	
 	@Autowired
     private JdbcTemplate jdbcTemplate;
 	
@@ -35,7 +38,7 @@ public class EmpDaoImp implements EmpDao{
 	@Override
 	public List<Employee> queryById(Object[] params) {
 		String sql = "select * from employee where id = ?";
-		RowMapper<Employee> rowMapper = new BeanPropertyRowMapper<Employee>(Employee.class);		 
+		RowMapper<Employee> rowMapper = new BeanPropertyRowMapper<Employee>(Employee.class);
         return jdbcTemplate.query(sql, rowMapper, params);
 	}
 	
@@ -67,35 +70,90 @@ public class EmpDaoImp implements EmpDao{
 	//查詢
 	@Override
 	public List<Employee> querEmp(Object obj) {
-
-		Map<String, Object> queryData = null;
 		StringBuffer sql = new StringBuffer();
-		sql.append(" select * from Employee where 1=1 ");
+		sql.append(" select * from employee where 1=1 ");
 		
-		try {
-			queryData = getQuerySQL(obj, sql);	
-			RowMapper<Employee> rowMapper = new BeanPropertyRowMapper<Employee>(Employee.class);		
-			return jdbcTemplate.query((String)queryData.get("querySQL"), rowMapper, (Object[])queryData.get("queryParams"));
-		} catch (IllegalAccessException e) {
-			e.printStackTrace();
-			return null;
-		}
+		Map<String, Object> queryData = null; //key:querySQL ,key:queryParams
+		queryData = getQuerySQL_2(obj, sql);	
+		RowMapper<Employee> rowMapper = new BeanPropertyRowMapper<Employee>(Employee.class);
+		return jdbcTemplate.query((String)queryData.get("querySQL"), rowMapper, (Object[])queryData.get("queryParams"));
 		
 	}
 	
+	//查詢(page)
+	@Override
+	public List<Employee> queryEmpPage(Object obj, int page) {
+		StringBuffer sql = new StringBuffer();
+		sql.append(" select * from employee where 1=1 ");
+		
+		Map<String, Object> queryData = null; 
+		queryData = getQuerySQL_2(obj, sql);	//key:querySQL ,key:queryParams
+		
+		int limitStart = ((page - 1) * countPerPage);
+		int limitEnd = countPerPage;
+		
+		String sqlStr = (String)queryData.get("querySQL") + " order by id limit " + limitStart + "," + limitEnd;
+
+		RowMapper<Employee> rowMapper = new BeanPropertyRowMapper<Employee>(Employee.class);
+		return jdbcTemplate.query(sqlStr, rowMapper, (Object[])queryData.get("queryParams"));
+	}
 	
-	//把物件的屬性和值取出判斷有哪些需要查詢
+	//把物件的屬性和值取出判斷有哪些需要查詢(第二種)
+	public Map<String, Object> getQuerySQL_2(Object obj, StringBuffer sql){
+		Map<String, Object> map = new HashMap<String, Object>();
+		ArrayList<Object> valueList = new ArrayList<>(); //屬性如果有值,拿來暫時存放
+		
+		Employee emp = new Employee();
+		emp = (Employee) obj;
+
+		if (emp.getName() != null && !emp.getName().equals("")) {
+			sql.append(" and name like ? ");
+			valueList.add("%" + emp.getName() + "%");
+		}
+		
+		if (emp.getAddr() != null && !emp.getAddr().equals("")) {
+			sql.append(" and addr = ? ");
+			valueList.add(emp.getAddr());
+		}
+		
+		if (emp.getBirthday() != null && !emp.getBirthday().equals("")) {
+			sql.append(" and birthday = ? ");
+			valueList.add(emp.getBirthday());
+		}
+		
+		if (emp.getSex() != null && !emp.getSex().equals("")) {
+			sql.append(" and sex = ? ");
+			valueList.add(emp.getSex());
+		}
+		
+		Object[] params = new Object[valueList.size()];
+		params = valueList.toArray(params);
+		
+		map.put("querySQL", sql.toString());
+		map.put("queryParams", params);
+		
+		return map;
+	}
+	
+	//把物件的屬性和值取出判斷有哪些需要查詢(第一種)
 	public Map<String, Object> getQuerySQL(Object obj, StringBuffer sql) throws IllegalArgumentException, IllegalAccessException {
 		Map<String, Object> map = new HashMap<String, Object>();
 		
 		ArrayList<Object> valueList = new ArrayList<>(); //屬性如果有值,拿來暫時存放
 
 		Class<?> cla = obj.getClass();
+		
+		//java.lang.Class類別的getDeclaredFields()方法用於獲取此類別的字段
+		//Class.getDeclaredFields()返回 Field 物件的一個數組，該陣列包含此 Class 物件所表示的類別或介面所宣告的所有欄位（包括私有成員）。
 		Field[] fields = cla.getDeclaredFields();
 		
-		int i = 0;
 		for(Field field : fields) {
+			
+			//Field繼承自AccessibleObject類，AccessibleObject是Field、Method、Constuctor類的父類。
+			//簡單理解意思就是 如果類型是private修飾的，你不可以直接訪問，就需要設置訪問權限為true.如果是public則不需要設置。
+			//set和get調用的時候都需要確保可以訪問，不然如果不能訪問拋出IllegalAccessException。
 			field.setAccessible(true);
+			
 			String keyName = field.getName();
 			Object value = field.get(obj);
 			
@@ -107,11 +165,10 @@ public class EmpDaoImp implements EmpDao{
 					sql.append(" and " + keyName + " = ? ");
 					valueList.add(value);	
 				}
-				i++;
 			}
 		}
 		
-		Object[] params = new Object[i];
+		Object[] params = new Object[valueList.size()];
 		params = valueList.toArray(params);
 		
 		map.put("querySQL" , sql.toString());
@@ -127,6 +184,18 @@ public class EmpDaoImp implements EmpDao{
 		jdbcTemplate.update(sql, params);
 		return queryById(new Object[] {id});
 	}
+	
+	//查詢總筆數
+	@Override
+	public int queryCount(Object obj) {
+		StringBuffer sql = new StringBuffer();
+		sql.append(" select count(*) from Employee where 1=1 ");
+		Map<String, Object> queryData = null; //key:querySQL ,key:queryParams
+		queryData = getQuerySQL_2(obj, sql);	
+		return jdbcTemplate.queryForObject((String)queryData.get("querySQL"), (Object[])queryData.get("queryParams"), Integer.class);
+	}
+
+	
 
 	
 

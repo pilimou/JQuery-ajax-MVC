@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.web.store.dao.EmpDao;
 import com.web.store.model.Employee;
+import com.web.store.model.QueryBean;
 import com.web.store.service.EmpService;
 
 @Service
@@ -43,6 +44,15 @@ public class EmpServiceImp implements EmpService {
 	public List<Employee> setUpdateEmp(Object[] params, int id) {
 		List<Employee> beans = empDao.updateEmp(params, id);
 		return beans;
+	}
+	
+	//查詢(筆數和資料)
+	@Override
+	public QueryBean getQueryEmpPage(Object obj, int page) {
+		List<Employee> beans = empDao.queryEmpPage(obj, page); //資料
+		int queryCount = empDao.queryCount(obj); 	//總資料筆數
+		int countPerPage = 5;						//每頁顯示筆數
+		return new QueryBean(queryCount, countPerPage, beans);
 	}
 
 }
